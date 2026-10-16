@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "learning-coach"
+version = "0.1.0"
+description = "Try first, then explain: a CLI learning coach that fights forgetting."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+coach = "coach.cli:main"
+
+[tool.setuptools]
+packages = ["coach"]
