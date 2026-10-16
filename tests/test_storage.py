@@ -14,3 +14,11 @@ def test_roundtrip_and_log(tmp_path):
 
 def test_slug():
     assert slug("  ??? ") == "topic"
+
+
+def test_slug_no_collision(tmp_path):
+    assert slug("C++") == "c-plus-plus" and slug("C#") == "c-sharp"
+    s = Store(tmp_path)
+    a = s.append_log("Git: rebase", "x")
+    b = s.append_log("git rebase", "y")
+    assert a != b and s.append_log("git rebase", "z") == b

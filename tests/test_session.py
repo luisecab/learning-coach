@@ -44,3 +44,29 @@ def test_no_key_without_fake(tmp_path, monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     with pytest.raises(SystemExit):
         main(["--dir", str(tmp_path), "start", "x"], ask=feeder(["0"]))
+
+
+def test_empty_quiz_answer_is_skipped(tmp_path, monkeypatch):
+    from coach import llm as llm_mod
+    monkeypatch.setattr(llm_mod.FakeLLM, "quiz", lambda self, t, l: ("Q?", ""))
+    d = str(tmp_path)
+    main(["--fake", "--dir", d, "start", "prompt caching"], ask=feeder(["0"]))
+    main(["--fake", "--dir", d, "learn"], ask=feeder(["a", "b"]))
+    assert json.loads((tmp_path / "state.json").read_text())["items"] == []
+
+
+def test_eof_exits_cleanly(tmp_path, capsys):
+    def eof(prompt=""):
+        raise EOFError
+    with pytest.raises(SystemExit) as e:
+        main(["--fake", "--dir", str(tmp_path), "start", "x"], ask=eof)
+    assert e.value.code == 130 and "Stopped" in capsys.readouterr().out
+
+
+def test_unknown_fake_topic_notice_and_plural(tmp_path, capsys):
+    d = str(tmp_path)
+    main(["--fake", "--dir", d, "start", "rust lifetimes"], ask=feeder(["0"]))
+    main(["--fake", "--dir", d, "learn"], ask=feeder(["a", "b"]))
+    assert "No canned lesson for 'rust lifetimes'" in capsys.readouterr().err
+    main(["--dir", d, "status"])
+    assert "1 lesson," in capsys.readouterr().out

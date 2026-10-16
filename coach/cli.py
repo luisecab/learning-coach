@@ -7,6 +7,10 @@ from .schedule import is_due, next_review
 from .storage import DEFAULT_DIR, Store
 
 
+def plural(n, word):
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
 def cmd_start(store, llm, args, ask, today):
     state = store.load()
     q = llm.level_question(args.topic)
@@ -32,14 +36,18 @@ def cmd_learn(store, llm, args, ask, today):
     back = ask("\nExplain it back in 1-2 lines> ")
     score, feedback = llm.score(topic, critique, back)
     print(f"Score: {score}/2. {feedback}")
-    question, answer = llm.quiz(topic, critique)
+    question, answer = (x.strip() for x in llm.quiz(topic, critique))
     _, due = next_review(-1, True, today)  # first review in ~2 days
-    state["items"].append({"topic": topic, "q": question, "a": answer, "step": 0, "due": due.isoformat()})
+    if question and answer:
+        state["items"].append({"topic": topic, "q": question, "a": answer, "step": 0, "due": due.isoformat()})
+    else:
+        print("(Could not build a quiz item from the model's reply; skipping review for this lesson.)")
     t["lessons"] += 1
     store.save(state)
     store.append_log(topic, f"## Lesson {today}\n**Problem:** {problem}\n\n**Attempt:** {attempt}\n\n"
                             f"{critique}\n\n**Explain-back ({score}/2):** {back}\n\n**Quiz:** {question} -> {answer}")
-    print(f"Saved. Review due {due}.")
+    if question and answer:
+        print(f"Saved. Review due {due}.")
 
 
 def cmd_review(store, llm, args, ask, today):
@@ -69,7 +77,7 @@ def cmd_status(store, llm, args, ask, today):
         return
     for name, t in state["topics"].items():
         n = sum(1 for i in state["items"] if i["topic"] == name and is_due(i["due"], today))
-        print(f"- {name}: {t['lessons']} lessons, {n} due")
+        print(f"- {name}: {plural(t['lessons'], 'lesson')}, {n} due")
     st = state["stats"]
     rate = st["answered"] / st["asked"] * 100 if st["asked"] else 0
     pct = st["correct"] / st["answered"] * 100 if st["answered"] else 0
@@ -95,7 +103,11 @@ def build_parser():
 def main(argv=None, ask=input, today=None):
     args = build_parser().parse_args(argv)
     llm = get_llm(args.fake) if args.cmd != "status" else None
-    args.fn(Store(args.dir), llm, args, ask, today or date.today())
+    try:
+        args.fn(Store(args.dir), llm, args, ask, today or date.today())
+    except (EOFError, KeyboardInterrupt):
+        print("\nStopped. Nothing from the unfinished step was saved.")
+        raise SystemExit(130)
 
 
 if __name__ == "__main__":
